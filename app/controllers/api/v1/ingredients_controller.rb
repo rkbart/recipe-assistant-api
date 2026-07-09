@@ -1,5 +1,5 @@
-class Api::IngredientsController < ApplicationController
-  before_action :set_ingredient, only: [ :show, :update, :destroy ]
+class Api::V1::IngredientsController < ApplicationController
+  before_action :set_ingredient, only: %i[show update destroy]
 
   def index
     @ingredients = Ingredient.all
@@ -13,10 +13,11 @@ class Api::IngredientsController < ApplicationController
 
   def create
     @ingredient = Ingredient.new(ingredient_params)
+
     if @ingredient.save
       render json: IngredientBlueprint.render(@ingredient), status: :created
     else
-      render json: @ingredient.errors, status: :unprocessable_entity
+      render_validation_errors(@ingredient)
     end
   end
 
@@ -24,7 +25,7 @@ class Api::IngredientsController < ApplicationController
     if @ingredient.update(ingredient_params)
       render json: IngredientBlueprint.render(@ingredient)
     else
-      render json: @ingredient.errors, status: :unprocessable_entity
+      render_validation_errors(@ingredient)
     end
   end
 

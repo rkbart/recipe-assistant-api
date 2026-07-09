@@ -1,4 +1,4 @@
-class Api::RecipesController < ApplicationController
+class Api::V1::RecipesController < ApplicationController
   before_action :set_recipe, only: %i[show update destroy]
 
   def index
@@ -32,7 +32,7 @@ class Api::RecipesController < ApplicationController
     if @recipe.save
       render json: RecipeBlueprint.render(@recipe), status: :created
     else
-      render json: { errors: @recipe.errors.full_messages }, status: :unprocessable_entity
+      render_validation_errors(@recipe)
     end
   end
 
@@ -40,7 +40,7 @@ class Api::RecipesController < ApplicationController
     if @recipe.update(recipe_params)
       render json: RecipeBlueprint.render(@recipe)
     else
-      render json: { errors: @recipe.errors.full_messages }, status: :unprocessable_entity
+      render_validation_errors(@recipe)
     end
   end
 
