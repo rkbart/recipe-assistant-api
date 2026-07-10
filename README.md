@@ -328,6 +328,111 @@ curl -X DELETE "http://localhost:3000/api/v1/ingredients/1"
 
 Returns `204 No Content` when successful.
 
+## AI Recipe Suggestions
+
+Generate recipe ideas using a local LLM (Ollama). The API accepts a text prompt and returns a structured recipe suggestion with title, instructions, ingredients, prep time, cook time, and servings.
+
+### Prerequisites
+
+Ollama must be running locally. Start it with Docker:
+
+```bash
+docker run -d --name ollama -p 11434:11434 ollama/ollama
+```
+
+The first time you request a suggestion, the `llama3.2` model (~2 GB) will be downloaded automatically. You can use a different model by setting the `OLLAMA_MODEL` environment variable.
+
+### Configuration
+
+| Environment Variable | Default | Description |
+|----------------------|---------|-------------|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_MODEL` | `llama3.2` | Model name to use |
+
+### Endpoints
+
+#### Request a Recipe Suggestion
+
+```http
+POST /api/v1/ai/recipe_suggestions
+```
+
+Example:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/ai/recipe_suggestions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipe_suggestion": {
+      "prompt": "quick chicken dinner"
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "prompt": "quick chicken dinner",
+  "status": "completed",
+  "model_used": "llama3.2",
+  "requested_at": "2026-07-09T09:37:30Z",
+  "completed_at": "2026-07-09T09:37:50Z",
+  "created_at": "2026-07-09T09:37:30Z",
+  "response": {
+    "title": "Quick Chicken Fajitas",
+    "instructions": "Heat olive oil in a large skillet...",
+    "ingredients": [
+      { "name": "chicken breasts", "quantity": 1, "unit": "pounds" },
+      { "name": "bell peppers", "quantity": 2, "unit": "cups" }
+    ],
+    "prep_time": 10,
+    "cook_time": 20,
+    "servings": 4
+  }
+}
+```
+
+The `status` field can be `pending`, `processing`, `completed`, or `failed`. Currently the request is processed synchronously and returns when complete. In production, the response returns immediately with `status: "pending"` and a background job processes the LLM call asynchronously.
+
+#### Get a Suggestion
+
+```http
+GET /api/v1/ai/recipe_suggestions/:id
+```
+
+Example:
+
+```bash
+curl "http://localhost:3000/api/v1/ai/recipe_suggestions/1"
+```
+
+#### List Recent Suggestions
+
+```http
+GET /api/v1/ai/recipe_suggestions
+```
+
+Returns the last 20 suggestions ordered by most recent.
+
+### How It Works
+
+1. The controller creates a `RecipeSuggestion` record with `status: "pending"`.
+2. The `Ai::RecipeSuggestionService` sends the user's prompt to Ollama's `/api/generate` endpoint with a system prompt that instructs the model to return structured JSON.
+3. The raw LLM response is parsed, validated for required fields (`title`, `instructions`, `ingredients`), and stored as JSON in the `response` column.
+4. If parsing fails, the suggestion is marked as `failed` with an error message.
+
+### Background Jobs
+
+The `Ai::RecipeSuggestionJob` is ready for async processing via Solid Queue. To enable it, replace the direct service call in the controller with:
+
+```ruby
+::Ai::RecipeSuggestionJob.perform_later(suggestion)
+```
+
+This is useful in production where LLM calls can take 10–30 seconds.
+
 ## Frontend Notes
 
 For a React and TypeScript frontend, configure the API base URL as:
